@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title th:text="${pageTitle}">Login</title>
+  <title>Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -21,9 +21,7 @@
 <body class="min-h-screen bg-mist text-forest">
   <main class="flex min-h-screen items-center justify-center px-6 py-12">
     <section class="w-full max-w-md rounded-3xl border border-forest/15 bg-white p-8 shadow-2xl shadow-forest/10">
-      <form class="space-y-6" method="post" th:action="@{/login}">
-        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-
+      <form class="space-y-6" method="post" action="#">
         <div class="space-y-2">
           <label for="username" class="block text-sm font-semibold tracking-wide">Email</label>
           <input
@@ -56,7 +54,7 @@
 
       <p class="mt-6 text-center text-sm text-forest/80">
         Need an account?
-        <a th:href="@{/signup}" class="font-semibold underline decoration-forest/40 underline-offset-4 hover:text-forest">
+        <a href="/signup" class="font-semibold underline decoration-forest/40 underline-offset-4 hover:text-forest">
           Sign up
         </a>
       </p>
