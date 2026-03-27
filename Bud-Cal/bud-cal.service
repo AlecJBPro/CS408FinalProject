@@ -1,0 +1,18 @@
+[Unit]
+Description=Bud-Cal Spring Boot Application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/CS408FinalProject/Bud-Cal
+Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+Environment="MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@cluster0.cpr2d1z.mongodb.net/budcal?retryWrites=true&w=majority&appName=Cluster0"
+Environment="MONGODB_DATABASE=budcal"
+ExecStart=/home/ubuntu/CS408FinalProject/Bud-Cal/mvnw spring-boot:run
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
