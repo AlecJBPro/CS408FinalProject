@@ -21,38 +21,46 @@
 <body class="min-h-screen bg-mist text-forest">
   <main class="flex min-h-screen items-center justify-center px-6 py-12">
     <section class="w-full max-w-md rounded-3xl border border-forest/15 bg-white p-8 shadow-2xl shadow-forest/10">
-      <form class="space-y-6">
+      <div class="mb-6">
+        <p class="text-sm uppercase tracking-[0.25em] text-forest/60">Bud-Cal</p>
+        <h1 class="mt-2 text-3xl font-semibold">Create your account</h1>
+      </div>
+
+      <form class="space-y-6" th:action="@{/signup}" th:object="${signupForm}" method="post">
         <div class="space-y-2">
           <label for="name" class="block text-sm font-semibold tracking-wide">Name</label>
           <input
             id="name"
-            name="name"
+            th:field="*{name}"
             type="text"
             placeholder="Your full name"
             class="w-full rounded-2xl border border-forest/20 bg-mist px-4 py-3 text-base text-forest outline-none transition focus:border-forest focus:ring-2 focus:ring-forest/20"
           />
+          <p th:if="${#fields.hasErrors('name')}" th:errors="*{name}" class="text-sm text-red-600">Name error</p>
         </div>
 
         <div class="space-y-2">
           <label for="email" class="block text-sm font-semibold tracking-wide">Email</label>
           <input
             id="email"
-            name="email"
+            th:field="*{email}"
             type="email"
             placeholder="you@example.com"
             class="w-full rounded-2xl border border-forest/20 bg-mist px-4 py-3 text-base text-forest outline-none transition focus:border-forest focus:ring-2 focus:ring-forest/20"
           />
+          <p th:if="${#fields.hasErrors('email')}" th:errors="*{email}" class="text-sm text-red-600">Email error</p>
         </div>
 
         <div class="space-y-2">
           <label for="password" class="block text-sm font-semibold tracking-wide">Password</label>
           <input
             id="password"
-            name="password"
+            th:field="*{password}"
             type="password"
             placeholder="Create a password"
             class="w-full rounded-2xl border border-forest/20 bg-mist px-4 py-3 text-base text-forest outline-none transition focus:border-forest focus:ring-2 focus:ring-forest/20"
           />
+          <p th:if="${#fields.hasErrors('password')}" th:errors="*{password}" class="text-sm text-red-600">Password error</p>
         </div>
 
         <button
