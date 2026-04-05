@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
+        "spring.data.mongodb.uri=mongodb://localhost:27017/budcal_test",
         "spring.data.mongodb.database=budcal_test"
 })
 class AuthFlowTests {

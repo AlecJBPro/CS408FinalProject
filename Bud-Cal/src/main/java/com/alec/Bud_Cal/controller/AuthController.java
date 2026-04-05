@@ -100,23 +100,6 @@ public class AuthController {
         return "redirect:/dashboard";
     }
 
-    @GetMapping("/dashboard")
-    public String dashboard(Model model, HttpSession session) {
-        String userEmail = (String) session.getAttribute(SESSION_USER_EMAIL);
-        if (userEmail == null) {
-            return "redirect:/login";
-        }
-
-        Optional<User> user = authService.findByEmail(userEmail);
-        if (user.isEmpty()) {
-            session.invalidate();
-            return "redirect:/login";
-        }
-
-        model.addAttribute("userName", user.get().getName());
-        return "dashboard";
-    }
-
     @PostMapping("/logout")
     public String logout(HttpSession session, RedirectAttributes redirectAttributes) {
         session.invalidate();
