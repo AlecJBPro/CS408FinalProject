@@ -68,12 +68,14 @@ public class AuthController {
             return "signup";
         }
 
+        System.out.println("Attempting to register user: " + signupForm.getEmail());
         Optional<User> user = authService.register(signupForm);
         if (user.isEmpty()) {
             bindingResult.rejectValue("email", "duplicate", "An account with this email already exists.");
             return "signup";
         }
 
+        System.out.println("Registration successful for: " + signupForm.getEmail());
         session.setAttribute(SESSION_USER_EMAIL, user.get().getEmail());
         return "redirect:/dashboard";
     }
@@ -90,12 +92,15 @@ public class AuthController {
             return "login";
         }
 
+        System.out.println("Attempting to authenticate user: " + loginForm.getEmail());
         Optional<User> user = authService.authenticate(loginForm);
         if (user.isEmpty()) {
+            System.out.println("Authentication failed for: " + loginForm.getEmail());
             model.addAttribute("authError", "Invalid email or password.");
             return "login";
         }
 
+        System.out.println("Authentication successful for: " + loginForm.getEmail());
         session.setAttribute(SESSION_USER_EMAIL, user.get().getEmail());
         return "redirect:/dashboard";
     }
