@@ -68,6 +68,32 @@ public class BudgetController {
         return "dashboard";
     }
 
+    @GetMapping("/allocation-calculator")
+    public String showAllocationCalculator(Model model, HttpSession session) {
+        String userEmail = (String) session.getAttribute(SESSION_USER_EMAIL);
+        if (userEmail == null) {
+            return "redirect:/login";
+        }
+
+        Optional<User> userOpt = authService.findByEmail(userEmail);
+        if (userOpt.isEmpty()) {
+            session.invalidate();
+            return "redirect:/login";
+        }
+
+        User user = userOpt.get();
+        String userId = user.getUserId();
+
+        BigDecimal totalIncome = incomeService.getTotalIncome(userId);
+        BigDecimal totalExpenses = expenseService.getTotalExpenses(userId);
+
+        model.addAttribute("userName", user.getName());
+        model.addAttribute("totalIncome", totalIncome);
+        model.addAttribute("totalExpenses", totalExpenses);
+
+        return "allocation-calculator";
+    }
+
     @PostMapping("/income")
     public String addIncome(@ModelAttribute Income income, HttpSession session, RedirectAttributes redirectAttributes) {
         String userEmail = (String) session.getAttribute(SESSION_USER_EMAIL);
@@ -128,9 +154,11 @@ public class BudgetController {
             return "redirect:/login";
         }
 
-        Optional<Income> income = incomeService.getIncomeById(id);
-        if (income.isPresent() && income.get().getUserId().equals(userOpt.get().getUserId())) {
-            incomeService.deleteIncome(id);
+        boolean deleted = incomeService.deleteIncomeByIdAndUserId(id, userOpt.get().getUserId());
+        System.out.println("Delete income request received. id=" + id + ", userEmail=" + userEmail
+                + ", resolvedUserId=" + userOpt.get().getUserId()
+                + ", deleted=" + deleted);
+        if (deleted) {
             redirectAttributes.addFlashAttribute("successMessage", "Income deleted successfully!");
         } else {
             redirectAttributes.addFlashAttribute("errorMessage", "Income not found or access denied.");
@@ -199,9 +227,11 @@ public class BudgetController {
             return "redirect:/login";
         }
 
-        Optional<Expense> expense = expenseService.getExpenseById(id);
-        if (expense.isPresent() && expense.get().getUserId().equals(userOpt.get().getUserId())) {
-            expenseService.deleteExpense(id);
+        boolean deleted = expenseService.deleteExpenseByIdAndUserId(id, userOpt.get().getUserId());
+        System.out.println("Delete expense request received. id=" + id + ", userEmail=" + userEmail
+                + ", resolvedUserId=" + userOpt.get().getUserId()
+                + ", deleted=" + deleted);
+        if (deleted) {
             redirectAttributes.addFlashAttribute("successMessage", "Expense deleted successfully!");
         } else {
             redirectAttributes.addFlashAttribute("errorMessage", "Expense not found or access denied.");

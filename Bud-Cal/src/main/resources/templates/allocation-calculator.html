@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Allocation Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            forest: "#2f5d3a",
+            mist: "#f5f5f5",
+            pine: "#1d3b25",
+            sand: "#efe7d7"
+          }
+        }
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const allocationList = document.getElementById('allocationList');
+      const addAccountButton = document.getElementById('addAccountButton');
+      const totalIncome = Number(document.body.dataset.totalIncome || 0);
+      const totalExpenses = Number(document.body.dataset.totalExpenses || 0);
+      let accountCounter = 0;
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD'
+        }).format(value);
+      }
+
+      function createAccountRow(name, percentage) {
+        accountCounter += 1;
+
+        const row = document.createElement('div');
+        row.className = 'allocation-row grid gap-4 rounded-2xl border border-forest/15 bg-white p-4 md:grid-cols-[1.6fr_0.8fr_0.9fr_auto] md:items-end';
+        row.innerHTML = `
+          <div>
+            <label class="block text-sm font-medium text-forest/75">Account Name</label>
+            <input
+              type="text"
+              value="${name}"
+              placeholder="Housing Fund"
+              class="account-name mt-2 block w-full rounded-xl border border-forest/20 px-3 py-2 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-forest/75">Allocation %</label>
+            <input
+              type="number"
+              value="${percentage}"
+              min="0"
+              max="100"
+              step="0.01"
+              class="account-percent mt-2 block w-full rounded-xl border border-forest/20 px-3 py-2 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest"
+            />
+          </div>
+          <div>
+            <p class="block text-sm font-medium text-forest/75">Allocated Amount</p>
+            <p class="account-amount mt-2 rounded-xl bg-mist px-3 py-2 text-base font-semibold text-forest">${formatCurrency(0)}</p>
+            <p class="checking-left mt-2 hidden text-sm font-medium text-amber-700"></p>
+          </div>
+          <div class="flex md:justify-end">
+            <button type="button" class="remove-account rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50">
+              Remove
+            </button>
+          </div>
+        `;
+
+        const removeButton = row.querySelector('.remove-account');
+        removeButton.addEventListener('click', function () {
+          row.remove();
+          updateCalculations();
+        });
+
+        row.querySelector('.account-name').addEventListener('input', updateCalculations);
+        row.querySelector('.account-percent').addEventListener('input', updateCalculations);
+        allocationList.appendChild(row);
+      }
+
+      function updateCalculations() {
+        const rows = Array.from(document.querySelectorAll('.allocation-row'));
+        let totalPercent = 0;
+
+        rows.forEach((row) => {
+          const percentInput = row.querySelector('.account-percent');
+          const nameInput = row.querySelector('.account-name');
+          const amountNode = row.querySelector('.account-amount');
+          const checkingNode = row.querySelector('.checking-left');
+
+          const percent = Number(percentInput.value || 0);
+          totalPercent += percent;
+
+          const rawAllocation = totalIncome * (percent / 100);
+          const allocation = Math.round(rawAllocation * 100) / 100;
+          amountNode.textContent = formatCurrency(allocation);
+
+          if (nameInput.value.trim().toLowerCase() === 'checking') {
+            const remaining = Math.round((allocation - totalExpenses) * 100) / 100;
+            checkingNode.classList.remove('hidden');
+            checkingNode.textContent = `After expenses: ${formatCurrency(remaining)}`;
+            checkingNode.classList.toggle('text-amber-700', remaining >= 0);
+            checkingNode.classList.toggle('text-red-600', remaining < 0);
+          } else {
+            checkingNode.classList.add('hidden');
+            checkingNode.textContent = '';
+            checkingNode.classList.remove('text-red-600');
+            checkingNode.classList.add('text-amber-700');
+          }
+        });
+
+        const roundedTotal = Math.round(totalPercent * 100) / 100;
+        const totalPercentNode = document.getElementById('totalPercent');
+        const validationMessage = document.getElementById('validationMessage');
+        const remainingPercentNode = document.getElementById('remainingPercent');
+
+        totalPercentNode.textContent = `${roundedTotal.toFixed(2)}%`;
+        remainingPercentNode.textContent = `${(100 - roundedTotal).toFixed(2)}%`;
+
+        if (Math.abs(roundedTotal - 100) < 0.001) {
+          validationMessage.textContent = 'Allocation is balanced at exactly 100%.';
+          validationMessage.className = 'rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700';
+        } else if (roundedTotal < 100) {
+          validationMessage.textContent = 'Allocation must total 100%. Add more percentage to finish your budget.';
+          validationMessage.className = 'rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700';
+        } else {
+          validationMessage.textContent = 'Allocation is over 100%. Reduce one or more accounts to rebalance.';
+          validationMessage.className = 'rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700';
+        }
+      }
+
+      addAccountButton.addEventListener('click', function () {
+        createAccountRow(`Custom Account ${accountCounter + 1}`, 0);
+        updateCalculations();
+      });
+
+      [
+        ['ROTH IRA', 15],
+        ['Savings', 20],
+        ['Checking', 45],
+        ['Emergency Fund', 10],
+        ['Housing Fund', 10]
+      ].forEach(([name, percentage]) => createAccountRow(name, percentage));
+
+      document.getElementById('totalIncomeDisplay').textContent = formatCurrency(totalIncome);
+      document.getElementById('totalExpensesDisplay').textContent = formatCurrency(totalExpenses);
+      updateCalculations();
+    });
+  </script>
+</head>
+<body
+  class="min-h-screen bg-[radial-gradient(circle_at_top,#f8fbf7_0%,#efe7d7_48%,#e7efe7_100%)] text-forest"
+  th:attr="data-total-income=${totalIncome},data-total-expenses=${totalExpenses}"
+>
+  <main class="mx-auto max-w-7xl px-6 py-10">
+    <section class="mb-8 overflow-hidden rounded-[2rem] border border-forest/15 bg-white/90 shadow-2xl shadow-forest/10 backdrop-blur">
+      <div class="grid gap-6 px-8 py-8 lg:grid-cols-[1.4fr_auto] lg:items-center">
+        <div>
+          <p class="text-sm uppercase tracking-[0.28em] text-forest/50">Budget Allocation Engine</p>
+          <h1 class="mt-3 text-4xl font-semibold text-pine" th:text="'Automatic split for ' + ${userName}">Automatic split</h1>
+          <p class="mt-4 max-w-3xl text-base leading-7 text-forest/80">
+            This calculator pulls your current income and expenses from Bud-Cal, then lets you split income into customizable accounts.
+            Checking automatically shows what remains after your existing expenses are subtracted.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a
+            th:href="@{/dashboard}"
+            class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-mist"
+          >
+            Back To Dashboard
+          </a>
+          <form th:action="@{/logout}" method="post">
+            <button
+              type="submit"
+              class="rounded-2xl bg-forest px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-mist transition hover:bg-forest/90"
+            >
+              Log Out
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-8 grid gap-5 lg:grid-cols-4">
+      <div class="rounded-[1.75rem] border border-forest/15 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Income Pulled In</p>
+        <p id="totalIncomeDisplay" class="mt-3 text-3xl font-semibold text-green-600">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/15 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Expenses Pulled In</p>
+        <p id="totalExpensesDisplay" class="mt-3 text-3xl font-semibold text-red-600">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/15 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Allocated Total</p>
+        <p id="totalPercent" class="mt-3 text-3xl font-semibold text-pine">0.00%</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/15 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Unassigned</p>
+        <p id="remainingPercent" class="mt-3 text-3xl font-semibold text-amber-700">100.00%</p>
+      </div>
+    </section>
+
+    <section class="grid gap-8 lg:grid-cols-[1.5fr_0.9fr]">
+      <div class="rounded-[2rem] border border-forest/15 bg-white p-8 shadow-2xl shadow-forest/10">
+        <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="text-2xl font-semibold text-pine">Customizable Accounts</h2>
+            <p class="mt-2 text-sm leading-6 text-forest/70">
+              Edit percentages live, rename any account, and add new ones for goals like housing, travel, or tuition.
+            </p>
+          </div>
+          <button
+            id="addAccountButton"
+            type="button"
+            class="rounded-2xl bg-sand px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-pine transition hover:bg-[#e4d8bd]"
+          >
+            Add Account
+          </button>
+        </div>
+
+        <div id="allocationList" class="space-y-4"></div>
+      </div>
+
+      <div class="space-y-6">
+        <div id="validationMessage" class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+          Allocation must total 100%. Add more percentage to finish your budget.
+        </div>
+
+        <div class="rounded-[2rem] border border-forest/15 bg-white p-8 shadow-xl shadow-forest/10">
+          <h2 class="text-2xl font-semibold text-pine">How It Works</h2>
+          <div class="mt-5 space-y-4 text-sm leading-7 text-forest/75">
+            <p>Your total income comes from the income entries already on your dashboard.</p>
+            <p>Your Checking account is treated as spendable cash, so this page subtracts your current total expenses from that bucket.</p>
+            <p>Everything happens locally in the page as a calculator. No extra API connections or saved account records are created.</p>
+          </div>
+        </div>
+
+        <div class="rounded-[2rem] border border-forest/15 bg-pine p-8 text-white shadow-xl shadow-pine/20">
+          <h2 class="text-2xl font-semibold">Suggested Starter Split</h2>
+          <div class="mt-5 space-y-3 text-sm leading-7 text-white/80">
+            <p>ROTH IRA: 15%</p>
+            <p>Savings: 20%</p>
+            <p>Checking: 45%</p>
+            <p>Emergency Fund: 10%</p>
+            <p>Housing Fund: 10%</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

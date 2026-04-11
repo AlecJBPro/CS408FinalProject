@@ -37,6 +37,14 @@ public class IncomeService {
         incomeRepository.deleteById(incomeId);
     }
 
+    public void deleteIncome(Income income) {
+        incomeRepository.delete(income);
+    }
+
+    public boolean deleteIncomeByIdAndUserId(String incomeId, String userId) {
+        return incomeRepository.deleteOwnedIncomeById(incomeId, userId) > 0;
+    }
+
     public BigDecimal getTotalIncome(String userId) {
         return getIncomesByUserId(userId).stream()
                 .map(Income::getAmount)

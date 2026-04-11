@@ -37,6 +37,14 @@ public class ExpenseService {
         expenseRepository.deleteById(expenseId);
     }
 
+    public void deleteExpense(Expense expense) {
+        expenseRepository.delete(expense);
+    }
+
+    public boolean deleteExpenseByIdAndUserId(String expenseId, String userId) {
+        return expenseRepository.deleteOwnedExpenseById(expenseId, userId) > 0;
+    }
+
     public BigDecimal getTotalExpenses(String userId) {
         return getExpensesByUserId(userId).stream()
                 .map(Expense::getAmount)

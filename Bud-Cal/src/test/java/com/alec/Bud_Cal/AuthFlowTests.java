@@ -77,4 +77,11 @@ class AuthFlowTests {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login"));
     }
+
+    @Test
+    void allocationCalculatorRedirectsWhenSessionIsMissing() throws Exception {
+        mockMvc.perform(get("/allocation-calculator"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+    }
 }

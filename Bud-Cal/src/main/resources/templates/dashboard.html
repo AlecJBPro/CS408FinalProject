@@ -6,6 +6,8 @@
   <title>Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
+    let pendingDelete = null;
+
     tailwind.config = {
       theme: {
         extend: {
@@ -42,56 +44,77 @@
     }
 
     function confirmDelete(type, id, name) {
-      if (confirm('Are you sure you want to delete this ' + type + ': ' + name + '?')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/' + type + '/' + id + '/delete';
-        document.body.appendChild(form);
-        form.submit();
+      if (!id) {
+        console.error('Delete aborted because no record id was provided.', { type, name });
+        return;
       }
+
+      const normalizedName = name || 'item';
+      pendingDelete = { type, id, name: normalizedName };
+      document.getElementById('deleteModalMessage').textContent =
+        'Are you sure you want to delete this ' + type + ': ' + normalizedName + '?';
+      document.getElementById('deleteConfirmModal').classList.remove('hidden');
     }
 
-    // Event listeners for edit and delete buttons
-    document.addEventListener('DOMContentLoaded', function() {
-      // Edit income buttons
-      document.querySelectorAll('.edit-income-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const id = this.getAttribute('data-id');
-          const source = this.getAttribute('data-source');
-          const amount = this.getAttribute('data-amount');
-          const category = this.getAttribute('data-category');
-          editIncome(id, source, amount, category);
-        });
-      });
+    function closeDeleteModal() {
+      pendingDelete = null;
+      document.getElementById('deleteConfirmModal').classList.add('hidden');
+    }
 
-      // Delete income buttons
-      document.querySelectorAll('.delete-income-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const id = this.getAttribute('data-id');
-          const name = this.getAttribute('data-name');
-          confirmDelete('income', id, name);
-        });
-      });
+    function submitPendingDelete() {
+      if (!pendingDelete) {
+        console.error('Delete confirmation was submitted without a pending delete target.');
+        return;
+      }
 
-      // Edit expense buttons
-      document.querySelectorAll('.edit-expense-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const id = this.getAttribute('data-id');
-          const description = this.getAttribute('data-description');
-          const amount = this.getAttribute('data-amount');
-          const category = this.getAttribute('data-category');
-          editExpense(id, description, amount, category);
-        });
-      });
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/' + pendingDelete.type + '/' + pendingDelete.id + '/delete';
+      document.body.appendChild(form);
+      form.submit();
+    }
 
-      // Delete expense buttons
-      document.querySelectorAll('.delete-expense-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const id = this.getAttribute('data-id');
-          const name = this.getAttribute('data-name');
-          confirmDelete('expense', id, name);
-        });
-      });
+    document.addEventListener('click', function(event) {
+      const incomeEditButton = event.target.closest('.edit-income-btn');
+      if (incomeEditButton) {
+        editIncome(
+          incomeEditButton.getAttribute('data-id'),
+          incomeEditButton.getAttribute('data-source'),
+          incomeEditButton.getAttribute('data-amount'),
+          incomeEditButton.getAttribute('data-category')
+        );
+        return;
+      }
+
+      const expenseEditButton = event.target.closest('.edit-expense-btn');
+      if (expenseEditButton) {
+        editExpense(
+          expenseEditButton.getAttribute('data-id'),
+          expenseEditButton.getAttribute('data-description'),
+          expenseEditButton.getAttribute('data-amount'),
+          expenseEditButton.getAttribute('data-category')
+        );
+        return;
+      }
+
+      const incomeDeleteButton = event.target.closest('.delete-income-btn');
+      if (incomeDeleteButton) {
+        confirmDelete(
+          'income',
+          incomeDeleteButton.getAttribute('data-id'),
+          incomeDeleteButton.getAttribute('data-name')
+        );
+        return;
+      }
+
+      const expenseDeleteButton = event.target.closest('.delete-expense-btn');
+      if (expenseDeleteButton) {
+        confirmDelete(
+          'expense',
+          expenseDeleteButton.getAttribute('data-id'),
+          expenseDeleteButton.getAttribute('data-name')
+        );
+      }
     });
   </script>
 </head>
@@ -107,14 +130,22 @@
           </p>
         </div>
 
-        <form th:action="@{/logout}" method="post">
-          <button
-            type="submit"
-            class="rounded-2xl bg-forest px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-mist transition hover:bg-forest/90"
+        <div class="flex flex-wrap gap-3">
+          <a
+            th:href="@{/allocation-calculator}"
+            class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-forest transition hover:bg-mist"
           >
-            Log Out
-          </button>
-        </form>
+            Budget Calculator
+          </a>
+          <form th:action="@{/logout}" method="post">
+            <button
+              type="submit"
+              class="rounded-2xl bg-forest px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-mist transition hover:bg-forest/90"
+            >
+              Log Out
+            </button>
+          </form>
+        </div>
       </div>
     </section>
 
@@ -188,7 +219,8 @@
                       th:data-category="${income.category}">Edit</button>
               <button type="button" class="delete-income-btn rounded px-3 py-1 text-sm bg-red-500 text-white hover:bg-red-600"
                       th:data-id="${income.incomeId}"
-                      th:data-name="${income.source}">Delete</button>
+                      th:data-name="${income.source}"
+                      onclick="confirmDelete('income', this.dataset.id, this.dataset.name)">Delete</button>
             </div>
           </div>
         </div>
@@ -241,11 +273,41 @@
                       th:data-category="${expense.category}">Edit</button>
               <button type="button" class="delete-expense-btn rounded px-3 py-1 text-sm bg-red-500 text-white hover:bg-red-600"
                       th:data-id="${expense.expenseId}"
-                      th:data-name="${expense.description}">Delete</button>
+                      th:data-name="${expense.description}"
+                      onclick="confirmDelete('expense', this.dataset.id, this.dataset.name)">Delete</button>
             </div>
           </div>
         </div>
       </section>
+    </div>
+
+    <!-- Edit Income Modal -->
+    <div id="deleteConfirmModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+      <div class="flex min-h-screen items-center justify-center px-4 py-6">
+        <div class="fixed inset-0 bg-gray-500 opacity-75" aria-hidden="true"></div>
+        <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <h3 class="text-xl font-semibold text-gray-900">Confirm Delete</h3>
+          <p id="deleteModalMessage" class="mt-4 text-sm leading-6 text-gray-700">
+            Are you sure you want to delete this item?
+          </p>
+          <div class="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              onclick="closeDeleteModal()"
+              class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onclick="submitPendingDelete()"
+              class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Edit Income Modal -->
