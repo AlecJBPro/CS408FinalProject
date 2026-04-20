@@ -94,6 +94,78 @@ public class BudgetController {
         return "allocation-calculator";
     }
 
+    @GetMapping("/financial-summary")
+    public String showFinancialSummary(Model model, HttpSession session) {
+        String userEmail = (String) session.getAttribute(SESSION_USER_EMAIL);
+        if (userEmail == null) {
+            return "redirect:/login";
+        }
+
+        Optional<User> userOpt = authService.findByEmail(userEmail);
+        if (userOpt.isEmpty()) {
+            session.invalidate();
+            return "redirect:/login";
+        }
+
+        User user = userOpt.get();
+        String userId = user.getUserId();
+
+        BigDecimal totalIncome = incomeService.getTotalIncome(userId);
+        BigDecimal totalExpenses = expenseService.getTotalExpenses(userId);
+        BigDecimal netIncome = totalIncome.subtract(totalExpenses);
+
+        model.addAttribute("userName", user.getName());
+        model.addAttribute("totalIncome", totalIncome);
+        model.addAttribute("totalExpenses", totalExpenses);
+        model.addAttribute("netIncome", netIncome);
+
+        return "financial-summary";
+    }
+
+    @GetMapping("/goal-tracker")
+    public String showGoalTracker(Model model, HttpSession session) {
+        String userEmail = (String) session.getAttribute(SESSION_USER_EMAIL);
+        if (userEmail == null) {
+            return "redirect:/login";
+        }
+
+        Optional<User> userOpt = authService.findByEmail(userEmail);
+        if (userOpt.isEmpty()) {
+            session.invalidate();
+            return "redirect:/login";
+        }
+
+        User user = userOpt.get();
+
+        model.addAttribute("userName", user.getName());
+        return "goal-tracker";
+    }
+
+    @GetMapping("/investment-structure")
+    public String showInvestmentStructure(Model model, HttpSession session) {
+        String userEmail = (String) session.getAttribute(SESSION_USER_EMAIL);
+        if (userEmail == null) {
+            return "redirect:/login";
+        }
+
+        Optional<User> userOpt = authService.findByEmail(userEmail);
+        if (userOpt.isEmpty()) {
+            session.invalidate();
+            return "redirect:/login";
+        }
+
+        User user = userOpt.get();
+        String userId = user.getUserId();
+
+        BigDecimal totalIncome = incomeService.getTotalIncome(userId);
+        BigDecimal totalExpenses = expenseService.getTotalExpenses(userId);
+
+        model.addAttribute("userName", user.getName());
+        model.addAttribute("totalIncome", totalIncome);
+        model.addAttribute("totalExpenses", totalExpenses);
+        return "investment-structure";
+    }
+
     @PostMapping("/income")
     public String addIncome(@ModelAttribute Income income, HttpSession session, RedirectAttributes redirectAttributes) {
         String userEmail = (String) session.getAttribute(SESSION_USER_EMAIL);

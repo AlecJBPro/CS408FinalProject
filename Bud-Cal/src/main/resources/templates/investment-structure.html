@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investment Structure</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: "#1f3658",
+            cloud: "#edf3fb",
+            gold: "#e6c98f",
+            pine: "#21382d"
+          }
+        }
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const snapshotKey = 'budcalAllocationSnapshot';
+      const configKey = 'budcalInvestmentStructure';
+      const accountsContainer = document.getElementById('investmentAccounts');
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(value);
+      }
+
+      function parseJson(key, fallback) {
+        try {
+          return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+        } catch (error) {
+          return fallback;
+        }
+      }
+
+      function futureValue(principal, monthlyContribution, annualReturn, years) {
+        const monthlyRate = annualReturn / 100 / 12;
+        const months = Math.max(0, Math.round(years * 12));
+        if (months === 0) {
+          return principal;
+        }
+        if (monthlyRate === 0) {
+          return principal + (monthlyContribution * months);
+        }
+        return (principal * Math.pow(1 + monthlyRate, months))
+          + (monthlyContribution * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate));
+      }
+
+      function saveConfig() {
+        const configs = {};
+        document.querySelectorAll('.investment-account-card').forEach((card) => {
+          const accountName = card.dataset.accountName;
+          configs[accountName] = {
+            cashPercent: Number(card.querySelector('.cash-percent').value || 0),
+            annualReturn: Number(card.querySelector('.annual-return').value || 0),
+            projectionYears: Number(card.querySelector('.projection-years').value || 0),
+            monthlyContribution: Number(card.querySelector('.monthly-contribution').value || 0),
+            holdings: Array.from(card.querySelectorAll('.holding-row')).map((row) => ({
+              symbol: row.querySelector('.holding-symbol').value.trim() || 'TICKER',
+              kind: row.querySelector('.holding-kind').value,
+              percent: Number(row.querySelector('.holding-percent').value || 0)
+            }))
+          };
+        });
+
+        localStorage.setItem(configKey, JSON.stringify(configs));
+      }
+
+      function createHoldingRow(container, holding) {
+        const row = document.createElement('div');
+        row.className = 'holding-row grid gap-4 rounded-2xl border border-navy/10 bg-white p-4 md:grid-cols-[1fr_1fr_0.8fr_auto] md:items-end';
+        row.innerHTML = `
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.18em] text-navy/55">Ticker / Name</label>
+            <input type="text" class="holding-symbol mt-2 w-full rounded-xl border border-navy/15 px-3 py-2 text-navy focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" value="${holding.symbol}" placeholder="VTI" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.18em] text-navy/55">Asset Type</label>
+            <select class="holding-kind mt-2 w-full rounded-xl border border-navy/15 px-3 py-2 text-navy focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy">
+              <option value="ETF" ${holding.kind === 'ETF' ? 'selected' : ''}>ETF</option>
+              <option value="Stock" ${holding.kind === 'Stock' ? 'selected' : ''}>Stock</option>
+              <option value="Fund" ${holding.kind === 'Fund' ? 'selected' : ''}>Fund</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-[0.18em] text-navy/55">% Of Invested Portion</label>
+            <input type="number" min="0" max="100" step="0.01" class="holding-percent mt-2 w-full rounded-xl border border-navy/15 px-3 py-2 text-navy focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" value="${holding.percent}" />
+          </div>
+          <div class="flex justify-end">
+            <button type="button" class="remove-holding rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50">Remove</button>
+          </div>
+        `;
+
+        row.querySelector('.remove-holding').addEventListener('click', function () {
+          row.remove();
+          updateCards();
+        });
+
+        row.querySelectorAll('input, select').forEach((field) => field.addEventListener('input', updateCards));
+        container.appendChild(row);
+      }
+
+      function createAccountCard(account, config) {
+        const card = document.createElement('section');
+        card.className = 'investment-account-card rounded-[2rem] border border-navy/10 bg-white p-7 shadow-xl shadow-navy/10';
+        card.dataset.accountName = account.name;
+        card.dataset.accountAmount = account.amount;
+
+        card.innerHTML = `
+          <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-navy/50">Investment Account</p>
+              <h2 class="mt-2 text-3xl font-semibold text-navy">${account.name}</h2>
+              <p class="mt-3 text-sm leading-6 text-navy/70">
+                Pulled from allocation calculator at ${account.percent.toFixed(2)}% of income.
+              </p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="rounded-2xl bg-cloud px-5 py-4">
+                <p class="text-xs uppercase tracking-[0.18em] text-navy/50">Allocated Amount</p>
+                <p class="mt-2 text-2xl font-semibold text-navy">${formatCurrency(account.amount)}</p>
+              </div>
+              <div class="rounded-2xl bg-cloud px-5 py-4">
+                <p class="text-xs uppercase tracking-[0.18em] text-navy/50">Allocation Share</p>
+                <p class="mt-2 text-2xl font-semibold text-navy">${account.percent.toFixed(2)}%</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 grid gap-4 lg:grid-cols-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-[0.18em] text-navy/55">Cash %</label>
+              <input type="number" min="0" max="100" step="0.01" class="cash-percent mt-2 w-full rounded-2xl border border-navy/15 px-4 py-3 text-navy focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" value="${config.cashPercent}" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-[0.18em] text-navy/55">Monthly Contribution</label>
+              <input type="number" min="0" step="0.01" class="monthly-contribution mt-2 w-full rounded-2xl border border-navy/15 px-4 py-3 text-navy focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" value="${config.monthlyContribution}" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-[0.18em] text-navy/55">Annual Return %</label>
+              <input type="number" min="0" step="0.1" class="annual-return mt-2 w-full rounded-2xl border border-navy/15 px-4 py-3 text-navy focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" value="${config.annualReturn}" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-[0.18em] text-navy/55">Projection Years</label>
+              <input type="number" min="0" step="0.5" class="projection-years mt-2 w-full rounded-2xl border border-navy/15 px-4 py-3 text-navy focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" value="${config.projectionYears}" />
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-[1.6rem] bg-cloud p-5">
+            <div class="mb-4 flex items-center justify-between">
+              <div>
+                <h3 class="text-xl font-semibold text-navy">Stocks / ETFs</h3>
+                <p class="mt-1 text-sm text-navy/65">Enter the percent split for the invested portion after cash is set aside.</p>
+              </div>
+              <button type="button" class="add-holding rounded-2xl bg-navy px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-navy/90">Add Holding</button>
+            </div>
+            <div class="holdings-list space-y-4"></div>
+          </div>
+
+          <div class="mt-6 grid gap-4 xl:grid-cols-5">
+            <div class="rounded-2xl border border-navy/10 bg-white px-5 py-4">
+              <p class="text-xs uppercase tracking-[0.18em] text-navy/50">Cash Reserve</p>
+              <p class="cash-amount mt-2 text-2xl font-semibold text-gold">$0.00</p>
+            </div>
+            <div class="rounded-2xl border border-navy/10 bg-white px-5 py-4">
+              <p class="text-xs uppercase tracking-[0.18em] text-navy/50">Investable Dollars</p>
+              <p class="investable-amount mt-2 text-2xl font-semibold text-navy">$0.00</p>
+            </div>
+            <div class="rounded-2xl border border-navy/10 bg-white px-5 py-4">
+              <p class="text-xs uppercase tracking-[0.18em] text-navy/50">Holdings % Used</p>
+              <p class="holdings-percent-total mt-2 text-2xl font-semibold text-navy">0.00%</p>
+            </div>
+            <div class="rounded-2xl border border-navy/10 bg-white px-5 py-4">
+              <p class="text-xs uppercase tracking-[0.18em] text-navy/50">Projected Future Value</p>
+              <p class="future-value mt-2 text-2xl font-semibold text-green-700">$0.00</p>
+            </div>
+            <div class="rounded-2xl border border-navy/10 bg-white px-5 py-4">
+              <p class="text-xs uppercase tracking-[0.18em] text-navy/50">Status</p>
+              <p class="allocation-status mt-2 text-sm font-semibold text-navy">Waiting for inputs</p>
+            </div>
+          </div>
+
+          <div class="holding-results mt-6 space-y-3"></div>
+        `;
+
+        const holdingsList = card.querySelector('.holdings-list');
+        const savedHoldings = Array.isArray(config.holdings) ? config.holdings : [];
+        (savedHoldings.length ? savedHoldings : [
+          { symbol: 'VTI', kind: 'ETF', percent: 60 },
+          { symbol: 'VXUS', kind: 'ETF', percent: 20 },
+          { symbol: 'QQQ', kind: 'ETF', percent: 20 }
+        ]).forEach((holding) => createHoldingRow(holdingsList, holding));
+
+        card.querySelector('.add-holding').addEventListener('click', function () {
+          createHoldingRow(holdingsList, { symbol: '', kind: 'ETF', percent: 0 });
+          updateCards();
+        });
+
+        card.querySelectorAll('input').forEach((field) => field.addEventListener('input', updateCards));
+        accountsContainer.appendChild(card);
+      }
+
+      function updateCards() {
+        const cards = Array.from(document.querySelectorAll('.investment-account-card'));
+        let totalInvestment = 0;
+        let totalCash = 0;
+        let totalProjected = 0;
+
+        cards.forEach((card) => {
+          const allocatedAmount = Number(card.dataset.accountAmount || 0);
+          const cashPercent = Number(card.querySelector('.cash-percent').value || 0);
+          const monthlyContribution = Number(card.querySelector('.monthly-contribution').value || 0);
+          const annualReturn = Number(card.querySelector('.annual-return').value || 0);
+          const projectionYears = Number(card.querySelector('.projection-years').value || 0);
+          const investableAmount = Math.max(allocatedAmount * ((100 - cashPercent) / 100), 0);
+          const cashAmount = Math.max(allocatedAmount * (cashPercent / 100), 0);
+          const holdings = Array.from(card.querySelectorAll('.holding-row'));
+          const holdingsTotal = holdings.reduce((sum, row) => sum + Number(row.querySelector('.holding-percent').value || 0), 0);
+
+          card.querySelector('.cash-amount').textContent = formatCurrency(cashAmount);
+          card.querySelector('.investable-amount').textContent = formatCurrency(investableAmount);
+          card.querySelector('.holdings-percent-total').textContent = `${holdingsTotal.toFixed(2)}%`;
+          card.querySelector('.future-value').textContent = formatCurrency(
+            futureValue(investableAmount, monthlyContribution, annualReturn, projectionYears)
+          );
+
+          const statusNode = card.querySelector('.allocation-status');
+          if (cashPercent > 100) {
+            statusNode.textContent = 'Cash percent must stay at or below 100%.';
+            statusNode.className = 'allocation-status mt-2 text-sm font-semibold text-red-600';
+          } else if (Math.abs(holdingsTotal - 100) < 0.01) {
+            statusNode.textContent = 'Holdings are fully allocated.';
+            statusNode.className = 'allocation-status mt-2 text-sm font-semibold text-green-700';
+          } else if (holdingsTotal < 100) {
+            statusNode.textContent = 'Add more holding percentage to reach 100% of the invested dollars.';
+            statusNode.className = 'allocation-status mt-2 text-sm font-semibold text-amber-700';
+          } else {
+            statusNode.textContent = 'Holdings are over 100%. Reduce one or more positions.';
+            statusNode.className = 'allocation-status mt-2 text-sm font-semibold text-red-600';
+          }
+
+          const results = card.querySelector('.holding-results');
+          results.innerHTML = '';
+          holdings.forEach((row) => {
+            const symbol = row.querySelector('.holding-symbol').value.trim() || 'Unnamed Holding';
+            const kind = row.querySelector('.holding-kind').value;
+            const percent = Number(row.querySelector('.holding-percent').value || 0);
+            const dollars = investableAmount * (percent / 100);
+
+            const result = document.createElement('div');
+            result.className = 'rounded-2xl border border-navy/10 bg-white px-5 py-4';
+            result.innerHTML = `
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-lg font-semibold text-navy">${symbol}</p>
+                  <p class="text-sm text-navy/60">${kind} at ${percent.toFixed(2)}% of invested dollars</p>
+                </div>
+                <p class="text-xl font-semibold text-pine">${formatCurrency(dollars)}</p>
+              </div>
+            `;
+            results.appendChild(result);
+          });
+
+          totalInvestment += investableAmount;
+          totalCash += cashAmount;
+          totalProjected += futureValue(investableAmount, monthlyContribution, annualReturn, projectionYears);
+        });
+
+        document.getElementById('summaryInvested').textContent = formatCurrency(totalInvestment);
+        document.getElementById('summaryCash').textContent = formatCurrency(totalCash);
+        document.getElementById('summaryProjected').textContent = formatCurrency(totalProjected);
+        document.getElementById('summaryAccounts').textContent = `${cards.length}`;
+
+        saveConfig();
+      }
+
+      const snapshot = parseJson(snapshotKey, { accounts: [] });
+      const configMap = parseJson(configKey, {});
+      const investmentAccounts = (snapshot.accounts || []).filter((account) => account.type === 'investment');
+
+      if (!investmentAccounts.length) {
+        document.getElementById('emptyState').classList.remove('hidden');
+        return;
+      }
+
+      investmentAccounts.forEach((account) => {
+        createAccountCard(account, configMap[account.name] || {
+          cashPercent: 10,
+          annualReturn: 7,
+          projectionYears: 10,
+          monthlyContribution: 250,
+          holdings: []
+        });
+      });
+
+      updateCards();
+    });
+  </script>
+</head>
+<body
+  class="min-h-screen bg-[linear-gradient(160deg,#f5f8fc_0%,#e5edf8_52%,#dde7f3_100%)] text-navy"
+  th:attr="data-total-income=${totalIncome},data-total-expenses=${totalExpenses}"
+>
+  <main class="mx-auto max-w-7xl px-6 py-10">
+    <section class="mb-8 overflow-hidden rounded-[2rem] border border-navy/10 bg-white/90 shadow-2xl shadow-navy/10">
+      <div class="grid gap-6 px-8 py-8 lg:grid-cols-[1.35fr_auto] lg:items-center">
+        <div>
+          <p class="text-sm uppercase tracking-[0.28em] text-navy/45">Investment Calculator</p>
+          <h1 class="mt-3 text-4xl font-semibold text-navy" th:text="'Investment Structure for ' + ${userName}">Investment Structure</h1>
+          <p class="mt-4 max-w-3xl text-base leading-7 text-navy/75">
+            This page pulls investment-designated accounts from your allocation calculator, lets you assign cash and stock/ETF percentages, and projects growth with a simple formula-based model.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a th:href="@{/dashboard}" class="rounded-2xl border border-navy/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-navy transition hover:bg-cloud">Dashboard</a>
+          <a th:href="@{/allocation-calculator}" class="rounded-2xl border border-navy/15 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-navy transition hover:bg-cloud">Allocation Source</a>
+          <a th:href="@{/goal-tracker}" class="rounded-2xl bg-gold px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-navy transition hover:bg-[#d9bb78]">Goal Tracker</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-[1.75rem] border border-navy/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-navy/45">Investment Accounts</p>
+        <p id="summaryAccounts" class="mt-3 text-3xl font-semibold text-navy">0</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-navy/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-navy/45">Invested Dollars</p>
+        <p id="summaryInvested" class="mt-3 text-3xl font-semibold text-green-700">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-navy/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-navy/45">Cash Reserved</p>
+        <p id="summaryCash" class="mt-3 text-3xl font-semibold text-gold">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-navy/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-navy/45">Projected Future Value</p>
+        <p id="summaryProjected" class="mt-3 text-3xl font-semibold text-navy">$0.00</p>
+      </div>
+    </section>
+
+    <div id="emptyState" class="hidden rounded-[2rem] border border-amber-200 bg-amber-50 p-8 text-amber-800 shadow-lg">
+      <h2 class="text-2xl font-semibold">No investment accounts found yet</h2>
+      <p class="mt-3 max-w-2xl text-sm leading-7">
+        Go to the allocation calculator and change at least one account type to <strong>Investment Account</strong>. This page will then pull that account's allocation amount and let you split it across cash, stocks, and ETFs.
+      </p>
+      <a th:href="@{/allocation-calculator}" class="mt-5 inline-flex rounded-2xl bg-navy px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-navy/90">Open Allocation Calculator</a>
+    </div>
+
+    <section id="investmentAccounts" class="space-y-7"></section>
+  </main>
+</body>
+</html>

@@ -20,6 +20,7 @@
     };
 
     document.addEventListener('DOMContentLoaded', function () {
+      const storageKey = 'budcalAllocationSnapshot';
       const allocationList = document.getElementById('allocationList');
       const addAccountButton = document.getElementById('addAccountButton');
       const totalIncome = Number(document.body.dataset.totalIncome || 0);
@@ -33,11 +34,34 @@
         }).format(value);
       }
 
-      function createAccountRow(name, percentage) {
+      function saveAllocationSnapshot() {
+        const accounts = Array.from(document.querySelectorAll('.allocation-row')).map((row) => {
+          const percent = Number(row.querySelector('.account-percent').value || 0);
+          const allocation = Math.round(totalIncome * (percent / 100) * 100) / 100;
+          return {
+            name: row.querySelector('.account-name').value.trim() || 'Unnamed Account',
+            percent: percent,
+            type: row.querySelector('.account-type').value,
+            amount: allocation
+          };
+        });
+
+        localStorage.setItem(storageKey, JSON.stringify({
+          totalIncome: totalIncome,
+          totalExpenses: totalExpenses,
+          accounts: accounts,
+          savedAt: new Date().toISOString()
+        }));
+
+        const savedIndicator = document.getElementById('savedIndicator');
+        savedIndicator.textContent = 'Investment and goal tools can now use this allocation snapshot.';
+      }
+
+      function createAccountRow(name, percentage, type) {
         accountCounter += 1;
 
         const row = document.createElement('div');
-        row.className = 'allocation-row grid gap-4 rounded-2xl border border-forest/15 bg-white p-4 md:grid-cols-[1.6fr_0.8fr_0.9fr_auto] md:items-end';
+        row.className = 'allocation-row grid gap-4 rounded-2xl border border-forest/15 bg-white p-4 md:grid-cols-[1.45fr_0.85fr_1fr_0.9fr_auto] md:items-end';
         row.innerHTML = `
           <div>
             <label class="block text-sm font-medium text-forest/75">Account Name</label>
@@ -60,6 +84,14 @@
             />
           </div>
           <div>
+            <label class="block text-sm font-medium text-forest/75">Account Type</label>
+            <select class="account-type mt-2 block w-full rounded-xl border border-forest/20 px-3 py-2 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest">
+              <option value="checking" ${type === 'checking' ? 'selected' : ''}>Checking / Spending</option>
+              <option value="savings" ${type === 'savings' ? 'selected' : ''}>Savings Goal</option>
+              <option value="investment" ${type === 'investment' ? 'selected' : ''}>Investment Account</option>
+            </select>
+          </div>
+          <div>
             <p class="block text-sm font-medium text-forest/75">Allocated Amount</p>
             <p class="account-amount mt-2 rounded-xl bg-mist px-3 py-2 text-base font-semibold text-forest">${formatCurrency(0)}</p>
             <p class="checking-left mt-2 hidden text-sm font-medium text-amber-700"></p>
@@ -71,24 +103,35 @@
           </div>
         `;
 
-        const removeButton = row.querySelector('.remove-account');
-        removeButton.addEventListener('click', function () {
+        row.querySelector('.remove-account').addEventListener('click', function () {
           row.remove();
           updateCalculations();
         });
 
         row.querySelector('.account-name').addEventListener('input', updateCalculations);
         row.querySelector('.account-percent').addEventListener('input', updateCalculations);
+        row.querySelector('.account-type').addEventListener('change', updateCalculations);
         allocationList.appendChild(row);
+      }
+
+      function loadSnapshot() {
+        try {
+          return JSON.parse(localStorage.getItem(storageKey) || 'null');
+        } catch (error) {
+          return null;
+        }
       }
 
       function updateCalculations() {
         const rows = Array.from(document.querySelectorAll('.allocation-row'));
         let totalPercent = 0;
+        let investmentPercent = 0;
+        let investmentDollars = 0;
 
         rows.forEach((row) => {
           const percentInput = row.querySelector('.account-percent');
           const nameInput = row.querySelector('.account-name');
+          const typeSelect = row.querySelector('.account-type');
           const amountNode = row.querySelector('.account-amount');
           const checkingNode = row.querySelector('.checking-left');
 
@@ -99,7 +142,15 @@
           const allocation = Math.round(rawAllocation * 100) / 100;
           amountNode.textContent = formatCurrency(allocation);
 
-          if (nameInput.value.trim().toLowerCase() === 'checking') {
+          if (typeSelect.value === 'investment') {
+            investmentPercent += percent;
+            investmentDollars += allocation;
+          }
+
+          if (
+            typeSelect.value === 'checking' ||
+            nameInput.value.trim().toLowerCase() === 'checking'
+          ) {
             const remaining = Math.round((allocation - totalExpenses) * 100) / 100;
             checkingNode.classList.remove('hidden');
             checkingNode.textContent = `After expenses: ${formatCurrency(remaining)}`;
@@ -114,13 +165,12 @@
         });
 
         const roundedTotal = Math.round(totalPercent * 100) / 100;
-        const totalPercentNode = document.getElementById('totalPercent');
+        document.getElementById('totalPercent').textContent = `${roundedTotal.toFixed(2)}%`;
+        document.getElementById('remainingPercent').textContent = `${(100 - roundedTotal).toFixed(2)}%`;
+        document.getElementById('investmentPercent').textContent = `${investmentPercent.toFixed(2)}%`;
+        document.getElementById('investmentDollars').textContent = formatCurrency(investmentDollars);
+
         const validationMessage = document.getElementById('validationMessage');
-        const remainingPercentNode = document.getElementById('remainingPercent');
-
-        totalPercentNode.textContent = `${roundedTotal.toFixed(2)}%`;
-        remainingPercentNode.textContent = `${(100 - roundedTotal).toFixed(2)}%`;
-
         if (Math.abs(roundedTotal - 100) < 0.001) {
           validationMessage.textContent = 'Allocation is balanced at exactly 100%.';
           validationMessage.className = 'rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700';
@@ -131,20 +181,27 @@
           validationMessage.textContent = 'Allocation is over 100%. Reduce one or more accounts to rebalance.';
           validationMessage.className = 'rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700';
         }
+
+        saveAllocationSnapshot();
       }
 
       addAccountButton.addEventListener('click', function () {
-        createAccountRow(`Custom Account ${accountCounter + 1}`, 0);
+        createAccountRow(`Custom Account ${accountCounter + 1}`, 0, 'savings');
         updateCalculations();
       });
 
-      [
-        ['ROTH IRA', 15],
-        ['Savings', 20],
-        ['Checking', 45],
-        ['Emergency Fund', 10],
-        ['Housing Fund', 10]
-      ].forEach(([name, percentage]) => createAccountRow(name, percentage));
+      const savedSnapshot = loadSnapshot();
+      const starterAccounts = savedSnapshot && Array.isArray(savedSnapshot.accounts) && savedSnapshot.accounts.length > 0
+        ? savedSnapshot.accounts
+        : [
+            { name: 'ROTH IRA', percent: 15, type: 'investment' },
+            { name: 'Savings', percent: 20, type: 'savings' },
+            { name: 'Checking', percent: 45, type: 'checking' },
+            { name: 'Emergency Fund', percent: 10, type: 'savings' },
+            { name: 'Housing Fund', percent: 10, type: 'savings' }
+          ];
+
+      starterAccounts.forEach((account) => createAccountRow(account.name, account.percent, account.type || 'savings'));
 
       document.getElementById('totalIncomeDisplay').textContent = formatCurrency(totalIncome);
       document.getElementById('totalExpensesDisplay').textContent = formatCurrency(totalExpenses);
@@ -164,7 +221,7 @@
           <h1 class="mt-3 text-4xl font-semibold text-pine" th:text="'Automatic split for ' + ${userName}">Automatic split</h1>
           <p class="mt-4 max-w-3xl text-base leading-7 text-forest/80">
             This calculator pulls your current income and expenses from Bud-Cal, then lets you split income into customizable accounts.
-            Checking automatically shows what remains after your existing expenses are subtracted.
+            Mark any row as an investment account and the investment modeling page will reuse that dollar amount automatically.
           </p>
         </div>
         <div class="flex flex-wrap gap-3">
@@ -174,19 +231,29 @@
           >
             Back To Dashboard
           </a>
-          <form th:action="@{/logout}" method="post">
-            <button
-              type="submit"
-              class="rounded-2xl bg-forest px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-mist transition hover:bg-forest/90"
-            >
-              Log Out
-            </button>
-          </form>
+          <a
+            th:href="@{/financial-summary}"
+            class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-mist"
+          >
+            Summary Dashboard
+          </a>
+          <a
+            th:href="@{/goal-tracker}"
+            class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-mist"
+          >
+            Goal Tracker
+          </a>
+          <a
+            th:href="@{/investment-structure}"
+            class="rounded-2xl bg-sand px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-pine transition hover:bg-[#e4d8bd]"
+          >
+            Investment Modeling
+          </a>
         </div>
       </div>
     </section>
 
-    <section class="mb-8 grid gap-5 lg:grid-cols-4">
+    <section class="mb-8 grid gap-5 lg:grid-cols-5">
       <div class="rounded-[1.75rem] border border-forest/15 bg-white p-6 shadow-lg">
         <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Income Pulled In</p>
         <p id="totalIncomeDisplay" class="mt-3 text-3xl font-semibold text-green-600">$0.00</p>
@@ -200,8 +267,12 @@
         <p id="totalPercent" class="mt-3 text-3xl font-semibold text-pine">0.00%</p>
       </div>
       <div class="rounded-[1.75rem] border border-forest/15 bg-white p-6 shadow-lg">
-        <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Unassigned</p>
-        <p id="remainingPercent" class="mt-3 text-3xl font-semibold text-amber-700">100.00%</p>
+        <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Investment %</p>
+        <p id="investmentPercent" class="mt-3 text-3xl font-semibold text-blue-700">0.00%</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/15 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.2em] text-forest/50">Investment Dollars</p>
+        <p id="investmentDollars" class="mt-3 text-3xl font-semibold text-blue-700">$0.00</p>
       </div>
     </section>
 
@@ -211,7 +282,7 @@
           <div>
             <h2 class="text-2xl font-semibold text-pine">Customizable Accounts</h2>
             <p class="mt-2 text-sm leading-6 text-forest/70">
-              Edit percentages live, rename any account, and add new ones for goals like housing, travel, or tuition.
+              Rename accounts, edit percentages live, and tag each one as spending, savings, or investment.
             </p>
           </div>
           <button
@@ -232,22 +303,20 @@
         </div>
 
         <div class="rounded-[2rem] border border-forest/15 bg-white p-8 shadow-xl shadow-forest/10">
-          <h2 class="text-2xl font-semibold text-pine">How It Works</h2>
+          <h2 class="text-2xl font-semibold text-pine">Snapshot Sharing</h2>
           <div class="mt-5 space-y-4 text-sm leading-7 text-forest/75">
-            <p>Your total income comes from the income entries already on your dashboard.</p>
-            <p>Your Checking account is treated as spendable cash, so this page subtracts your current total expenses from that bucket.</p>
-            <p>Everything happens locally in the page as a calculator. No extra API connections or saved account records are created.</p>
+            <p id="savedIndicator">This page saves your allocation layout in the browser for the other checkpoint calculators.</p>
+            <p>The investment page only pulls rows marked as <strong>Investment Account</strong>.</p>
+            <p>The goal tracker remains a calculator too, so none of these records are stored in your backend database.</p>
           </div>
         </div>
 
         <div class="rounded-[2rem] border border-forest/15 bg-pine p-8 text-white shadow-xl shadow-pine/20">
-          <h2 class="text-2xl font-semibold">Suggested Starter Split</h2>
+          <h2 class="text-2xl font-semibold">How It Works</h2>
           <div class="mt-5 space-y-3 text-sm leading-7 text-white/80">
-            <p>ROTH IRA: 15%</p>
-            <p>Savings: 20%</p>
-            <p>Checking: 45%</p>
-            <p>Emergency Fund: 10%</p>
-            <p>Housing Fund: 10%</p>
+            <p>Checking rows subtract your current expenses so you can see what spendable cash remains.</p>
+            <p>Investment rows carry their exact allocation dollars into the investment structure page.</p>
+            <p id="remainingPercent" class="font-semibold text-[#f6dd9d]">100.00%</p>
           </div>
         </div>
       </div>

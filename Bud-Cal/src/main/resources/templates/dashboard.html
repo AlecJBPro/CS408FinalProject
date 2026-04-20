@@ -132,10 +132,28 @@
 
         <div class="flex flex-wrap gap-3">
           <a
+            th:href="@{/financial-summary}"
+            class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-forest transition hover:bg-mist"
+          >
+            Summary
+          </a>
+          <a
             th:href="@{/allocation-calculator}"
             class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-forest transition hover:bg-mist"
           >
             Budget Calculator
+          </a>
+          <a
+            th:href="@{/goal-tracker}"
+            class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-forest transition hover:bg-mist"
+          >
+            Goal Tracker
+          </a>
+          <a
+            th:href="@{/investment-structure}"
+            class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-forest transition hover:bg-mist"
+          >
+            Investments
           </a>
           <form th:action="@{/logout}" method="post">
             <button

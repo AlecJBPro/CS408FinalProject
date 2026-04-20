@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Financial Summary</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            forest: "#214033",
+            moss: "#5f8161",
+            clay: "#c87f56",
+            cream: "#f8f4eb",
+            slate: "#31475b",
+            gold: "#d5b670"
+          }
+        }
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const snapshotKey = 'budcalAllocationSnapshot';
+      const totalIncome = Number(document.body.dataset.totalIncome || 0);
+      const totalExpenses = Number(document.body.dataset.totalExpenses || 0);
+      const netIncome = Number(document.body.dataset.netIncome || 0);
+      const colors = ['#214033', '#5f8161', '#c87f56', '#31475b', '#d5b670', '#8c9f68', '#7c5d48'];
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(value);
+      }
+
+      function getSnapshot() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(snapshotKey) || 'null');
+          return parsed && Array.isArray(parsed.accounts) ? parsed : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+        const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+        return {
+          x: centerX + (radius * Math.cos(angleInRadians)),
+          y: centerY + (radius * Math.sin(angleInRadians))
+        };
+      }
+
+      function describeArc(x, y, radius, startAngle, endAngle) {
+        const start = polarToCartesian(x, y, radius, endAngle);
+        const end = polarToCartesian(x, y, radius, startAngle);
+        const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+        return [
+          'M', x, y,
+          'L', start.x, start.y,
+          'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y,
+          'Z'
+        ].join(' ');
+      }
+
+      function renderPieChart(accounts) {
+        const chart = document.getElementById('allocationPieChart');
+        const legend = document.getElementById('allocationLegend');
+        chart.innerHTML = '';
+        legend.innerHTML = '';
+
+        if (!accounts.length) {
+          chart.innerHTML = '<div class="flex h-full items-center justify-center text-sm text-forest/60">No allocation data yet</div>';
+          return;
+        }
+
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('viewBox', '0 0 320 320');
+        svg.setAttribute('class', 'h-full w-full');
+
+        let startAngle = 0;
+        accounts.forEach((account, index) => {
+          const sliceAngle = (account.percent / 100) * 360;
+          const path = document.createElementNS(svgNS, 'path');
+          path.setAttribute('d', describeArc(160, 160, 120, startAngle, startAngle + sliceAngle));
+          path.setAttribute('fill', colors[index % colors.length]);
+          path.setAttribute('stroke', '#ffffff');
+          path.setAttribute('stroke-width', '4');
+          svg.appendChild(path);
+          startAngle += sliceAngle;
+
+          const legendItem = document.createElement('div');
+          legendItem.className = 'flex items-center justify-between gap-4 rounded-2xl border border-forest/10 bg-white px-4 py-3';
+          legendItem.innerHTML = `
+            <div class="flex items-center gap-3">
+              <span class="h-4 w-4 rounded-full" style="background:${colors[index % colors.length]}"></span>
+              <div>
+                <p class="font-semibold text-forest">${account.name}</p>
+                <p class="text-sm text-forest/60">${account.typeLabel}</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="font-semibold text-slate">${account.percent.toFixed(2)}%</p>
+              <p class="text-sm text-forest/60">${formatCurrency(account.amount)}</p>
+            </div>
+          `;
+          legend.appendChild(legendItem);
+        });
+
+        const centerCircle = document.createElementNS(svgNS, 'circle');
+        centerCircle.setAttribute('cx', '160');
+        centerCircle.setAttribute('cy', '160');
+        centerCircle.setAttribute('r', '58');
+        centerCircle.setAttribute('fill', '#ffffff');
+        svg.appendChild(centerCircle);
+
+        const incomeLabel = document.createElementNS(svgNS, 'text');
+        incomeLabel.setAttribute('x', '160');
+        incomeLabel.setAttribute('y', '150');
+        incomeLabel.setAttribute('text-anchor', 'middle');
+        incomeLabel.setAttribute('fill', '#214033');
+        incomeLabel.setAttribute('font-size', '14');
+        incomeLabel.textContent = 'Income';
+        svg.appendChild(incomeLabel);
+
+        const incomeValue = document.createElementNS(svgNS, 'text');
+        incomeValue.setAttribute('x', '160');
+        incomeValue.setAttribute('y', '175');
+        incomeValue.setAttribute('text-anchor', 'middle');
+        incomeValue.setAttribute('fill', '#214033');
+        incomeValue.setAttribute('font-size', '18');
+        incomeValue.setAttribute('font-weight', '700');
+        incomeValue.textContent = formatCurrency(totalIncome);
+        svg.appendChild(incomeValue);
+
+        chart.appendChild(svg);
+      }
+
+      function renderBarChart(accounts) {
+        const container = document.getElementById('balanceBarChart');
+        container.innerHTML = '';
+
+        if (!accounts.length) {
+          container.innerHTML = '<div class="rounded-2xl border border-forest/10 bg-white px-5 py-6 text-sm text-forest/60">Build your allocation first to see account balances here.</div>';
+          return;
+        }
+
+        const highestAmount = Math.max(...accounts.map((account) => account.amount), 1);
+        accounts.forEach((account, index) => {
+          const row = document.createElement('div');
+          row.className = 'space-y-2';
+          row.innerHTML = `
+            <div class="flex items-center justify-between gap-4 text-sm">
+              <div>
+                <p class="font-semibold text-forest">${account.name}</p>
+                <p class="text-forest/55">${account.typeLabel}</p>
+              </div>
+              <p class="font-semibold text-slate">${formatCurrency(account.amount)}</p>
+            </div>
+            <div class="h-5 overflow-hidden rounded-full bg-[#e7ede7]">
+              <div class="h-full rounded-full transition-all duration-500" style="width:${(account.amount / highestAmount) * 100}%; background:${colors[index % colors.length]};"></div>
+            </div>
+          `;
+          container.appendChild(row);
+        });
+      }
+
+      function updateSummaryCards(accounts) {
+        const totalAllocated = accounts.reduce((sum, account) => sum + account.amount, 0);
+        const investmentTotal = accounts
+          .filter((account) => account.type === 'investment')
+          .reduce((sum, account) => sum + account.amount, 0);
+        const savingsTotal = accounts
+          .filter((account) => account.type === 'savings')
+          .reduce((sum, account) => sum + account.amount, 0);
+
+        document.getElementById('totalIncomeDisplay').textContent = formatCurrency(totalIncome);
+        document.getElementById('totalExpensesDisplay').textContent = formatCurrency(totalExpenses);
+        document.getElementById('netIncomeDisplay').textContent = formatCurrency(netIncome);
+        document.getElementById('allocatedDisplay').textContent = formatCurrency(totalAllocated);
+        document.getElementById('investmentDisplay').textContent = formatCurrency(investmentTotal);
+        document.getElementById('savingsDisplay').textContent = formatCurrency(savingsTotal);
+        document.getElementById('coverageDisplay').textContent = totalIncome > 0
+          ? `${((totalExpenses / totalIncome) * 100).toFixed(1)}%`
+          : '0.0%';
+        document.getElementById('snapshotStatus').textContent = accounts.length
+          ? `Using ${accounts.length} accounts from your latest allocation snapshot.`
+          : 'No allocation snapshot found yet. The summary cards still use your live income and expense totals.';
+      }
+
+      const snapshot = getSnapshot();
+      const accounts = snapshot
+        ? snapshot.accounts.map((account) => ({
+            name: account.name,
+            percent: Number(account.percent || 0),
+            amount: Number(account.amount || 0),
+            type: account.type || 'savings',
+            typeLabel: account.type === 'investment'
+              ? 'Investment Account'
+              : account.type === 'checking'
+                ? 'Checking / Spending'
+                : 'Savings Goal'
+          }))
+        : [];
+
+      updateSummaryCards(accounts);
+      renderPieChart(accounts);
+      renderBarChart(accounts);
+    });
+  </script>
+</head>
+<body
+  class="min-h-screen bg-[linear-gradient(155deg,#f9f6ef_0%,#edf3ee_46%,#dbe4dd_100%)] text-forest"
+  th:attr="data-total-income=${totalIncome},data-total-expenses=${totalExpenses},data-net-income=${netIncome}"
+>
+  <main class="mx-auto max-w-7xl px-6 py-10">
+    <section class="mb-8 overflow-hidden rounded-[2rem] border border-forest/10 bg-white/90 shadow-2xl shadow-forest/10">
+      <div class="grid gap-6 px-8 py-8 lg:grid-cols-[1.35fr_auto] lg:items-center">
+        <div>
+          <p class="text-sm uppercase tracking-[0.28em] text-forest/45">Checkpoint 5</p>
+          <h1 class="mt-3 text-4xl font-semibold" th:text="'Financial Summary for ' + ${userName}">Financial Summary</h1>
+          <p class="mt-4 max-w-3xl text-base leading-7 text-forest/80">
+            Review a complete dashboard view of your budget with live summary metrics, an allocation pie chart, and a bar graph of account balances.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a th:href="@{/dashboard}" class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-cream">Dashboard</a>
+          <a th:href="@{/allocation-calculator}" class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-cream">Allocation</a>
+          <a th:href="@{/goal-tracker}" class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-cream">Goals</a>
+          <a th:href="@{/investment-structure}" class="rounded-2xl bg-gold px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-[#c9aa62]">Investments</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/45">Total Income</p>
+        <p id="totalIncomeDisplay" class="mt-3 text-3xl font-semibold text-green-700">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/45">Total Expenses</p>
+        <p id="totalExpensesDisplay" class="mt-3 text-3xl font-semibold text-clay">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/45">Net Income</p>
+        <p id="netIncomeDisplay" class="mt-3 text-3xl font-semibold text-slate">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/45">Expense Coverage</p>
+        <p id="coverageDisplay" class="mt-3 text-3xl font-semibold text-moss">0.0%</p>
+      </div>
+    </section>
+
+    <section class="mb-8 grid gap-5 md:grid-cols-3">
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/45">Allocated Balance</p>
+        <p id="allocatedDisplay" class="mt-3 text-3xl font-semibold text-forest">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/45">Investment Accounts</p>
+        <p id="investmentDisplay" class="mt-3 text-3xl font-semibold text-slate">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/45">Savings Accounts</p>
+        <p id="savingsDisplay" class="mt-3 text-3xl font-semibold text-moss">$0.00</p>
+      </div>
+    </section>
+
+    <section class="grid gap-8 xl:grid-cols-[1.05fr_1.15fr]">
+      <div class="space-y-6">
+        <div class="rounded-[2rem] border border-forest/10 bg-white p-8 shadow-xl shadow-forest/10">
+          <div class="mb-4">
+            <h2 class="text-2xl font-semibold text-forest">Allocation Pie Chart</h2>
+            <p class="mt-2 text-sm leading-6 text-forest/70">Each slice reflects the percentage split from your latest allocation setup.</p>
+          </div>
+          <div class="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div id="allocationPieChart" class="mx-auto aspect-square h-full max-h-[320px] w-full max-w-[320px]"></div>
+            <div id="allocationLegend" class="space-y-3"></div>
+          </div>
+        </div>
+
+        <div class="rounded-[2rem] bg-[#233a2e] p-8 text-white shadow-xl shadow-forest/20">
+          <h2 class="text-2xl font-semibold">Dashboard Status</h2>
+          <p id="snapshotStatus" class="mt-4 text-sm leading-7 text-white/80">
+            Waiting for current allocation snapshot.
+          </p>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <div class="rounded-[2rem] border border-forest/10 bg-white p-8 shadow-xl shadow-forest/10">
+          <div class="mb-4">
+            <h2 class="text-2xl font-semibold text-forest">Account Balance Bar Graph</h2>
+            <p class="mt-2 text-sm leading-6 text-forest/70">Bars compare the calculated dollar balance for each account in your allocation.</p>
+          </div>
+          <div id="balanceBarChart" class="space-y-5"></div>
+        </div>
+
+        <div class="rounded-[2rem] border border-forest/10 bg-white p-8 shadow-xl shadow-forest/10">
+          <h2 class="text-2xl font-semibold text-forest">How To Refresh</h2>
+          <div class="mt-4 space-y-3 text-sm leading-7 text-forest/75">
+            <p>Edit your budget split on the allocation calculator and this page will pick up the latest saved account snapshot.</p>
+            <p>The financial summary cards always use your live income and expense totals from Bud-Cal.</p>
+            <p>The charts stay calculator-based, so no extra API or database tables are required for Checkpoint 5.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

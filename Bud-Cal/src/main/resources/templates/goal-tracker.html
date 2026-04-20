@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Goal Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            forest: "#244736",
+            moss: "#587a5a",
+            sand: "#efe1c6",
+            cream: "#fcfaf4"
+          }
+        }
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const goalList = document.getElementById('goalList');
+      const addGoalButton = document.getElementById('addGoalButton');
+      let goalCounter = 0;
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(value);
+      }
+
+      function calculateFutureValue(currentAmount, monthlyContribution, annualReturn, years) {
+        const months = Math.max(0, Math.round(years * 12));
+        const monthlyRate = annualReturn / 100 / 12;
+
+        if (months === 0) {
+          return currentAmount;
+        }
+
+        if (monthlyRate === 0) {
+          return currentAmount + (monthlyContribution * months);
+        }
+
+        const growthOnCurrent = currentAmount * Math.pow(1 + monthlyRate, months);
+        const growthOnContributions = monthlyContribution * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate);
+        return growthOnCurrent + growthOnContributions;
+      }
+
+      function estimateMonthsToGoal(targetAmount, currentAmount, monthlyContribution, annualReturn) {
+        if (currentAmount >= targetAmount) {
+          return 0;
+        }
+
+        if (monthlyContribution <= 0 && annualReturn <= 0) {
+          return null;
+        }
+
+        let balance = currentAmount;
+        const monthlyRate = annualReturn / 100 / 12;
+
+        for (let month = 1; month <= 600; month += 1) {
+          balance = (balance * (1 + monthlyRate)) + monthlyContribution;
+          if (balance >= targetAmount) {
+            return month;
+          }
+        }
+
+        return null;
+      }
+
+      function createGoalCard(goal) {
+        goalCounter += 1;
+        const wrapper = document.createElement('article');
+        wrapper.className = 'goal-card rounded-[2rem] border border-forest/10 bg-white p-6 shadow-lg shadow-forest/10';
+        wrapper.innerHTML = `
+          <div class="grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
+            <div>
+              <label class="block text-sm font-semibold uppercase tracking-[0.16em] text-forest/55">Goal Name</label>
+              <input type="text" class="goal-name mt-2 w-full rounded-2xl border border-forest/15 px-4 py-3 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest" value="${goal.name}" placeholder="House Down Payment" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold uppercase tracking-[0.16em] text-forest/55">Target Amount</label>
+              <input type="number" min="0" step="0.01" class="goal-target mt-2 w-full rounded-2xl border border-forest/15 px-4 py-3 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest" value="${goal.target}" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold uppercase tracking-[0.16em] text-forest/55">Current Saved</label>
+              <input type="number" min="0" step="0.01" class="goal-current mt-2 w-full rounded-2xl border border-forest/15 px-4 py-3 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest" value="${goal.current}" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold uppercase tracking-[0.16em] text-forest/55">Monthly Contribution</label>
+              <input type="number" min="0" step="0.01" class="goal-monthly mt-2 w-full rounded-2xl border border-forest/15 px-4 py-3 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest" value="${goal.monthly}" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold uppercase tracking-[0.16em] text-forest/55">Annual Growth %</label>
+              <input type="number" min="0" step="0.1" class="goal-return mt-2 w-full rounded-2xl border border-forest/15 px-4 py-3 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest" value="${goal.returnRate}" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold uppercase tracking-[0.16em] text-forest/55">Projection Years</label>
+              <input type="number" min="0" step="0.5" class="goal-years mt-2 w-full rounded-2xl border border-forest/15 px-4 py-3 text-forest focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest" value="${goal.years}" />
+            </div>
+          </div>
+
+          <div class="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_auto] lg:items-end">
+            <div>
+              <div class="flex items-center justify-between text-sm font-medium text-forest/70">
+                <span>Progress</span>
+                <span class="goal-progress-label">0%</span>
+              </div>
+              <div class="mt-3 h-4 overflow-hidden rounded-full bg-[#edf2ea]">
+                <div class="goal-progress-bar h-full rounded-full bg-gradient-to-r from-moss to-forest" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="rounded-2xl bg-cream px-4 py-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-forest/45">Remaining</p>
+              <p class="goal-remaining mt-2 text-xl font-semibold text-forest">$0.00</p>
+            </div>
+            <div class="rounded-2xl bg-cream px-4 py-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-forest/45">Projected Value</p>
+              <p class="goal-projection mt-2 text-xl font-semibold text-forest">$0.00</p>
+            </div>
+            <div class="rounded-2xl bg-cream px-4 py-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-forest/45">Goal ETA</p>
+              <p class="goal-eta mt-2 text-xl font-semibold text-forest">-</p>
+            </div>
+            <div class="flex justify-end">
+              <button type="button" class="remove-goal rounded-2xl border border-red-200 px-5 py-3 text-sm font-semibold uppercase tracking-[0.15em] text-red-600 transition hover:bg-red-50">
+                Remove
+              </button>
+            </div>
+          </div>
+
+          <p class="goal-status mt-5 text-sm font-medium text-forest/75"></p>
+        `;
+
+        wrapper.querySelector('.remove-goal').addEventListener('click', function () {
+          wrapper.remove();
+          updateGoals();
+        });
+
+        wrapper.querySelectorAll('input').forEach((input) => input.addEventListener('input', updateGoals));
+        goalList.appendChild(wrapper);
+      }
+
+      function updateGoals() {
+        const cards = Array.from(document.querySelectorAll('.goal-card'));
+        let totalTarget = 0;
+        let totalCurrent = 0;
+        let totalProjected = 0;
+
+        cards.forEach((card) => {
+          const target = Number(card.querySelector('.goal-target').value || 0);
+          const current = Number(card.querySelector('.goal-current').value || 0);
+          const monthly = Number(card.querySelector('.goal-monthly').value || 0);
+          const returnRate = Number(card.querySelector('.goal-return').value || 0);
+          const years = Number(card.querySelector('.goal-years').value || 0);
+
+          const progress = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+          const projectedValue = calculateFutureValue(current, monthly, returnRate, years);
+          const remaining = Math.max(target - current, 0);
+          const etaMonths = estimateMonthsToGoal(target, current, monthly, returnRate);
+
+          card.querySelector('.goal-progress-label').textContent = `${progress.toFixed(1)}%`;
+          card.querySelector('.goal-progress-bar').style.width = `${progress}%`;
+          card.querySelector('.goal-remaining').textContent = formatCurrency(remaining);
+          card.querySelector('.goal-projection').textContent = formatCurrency(projectedValue);
+          card.querySelector('.goal-eta').textContent = etaMonths === null ? 'No path' : etaMonths === 0 ? 'Complete' : `${etaMonths} mo`;
+
+          const statusNode = card.querySelector('.goal-status');
+          if (target > 0 && projectedValue >= target) {
+            statusNode.textContent = 'Projection says this goal is on track with the current savings rate and growth assumption.';
+            statusNode.className = 'goal-status mt-5 text-sm font-medium text-green-700';
+          } else if (target > 0) {
+            statusNode.textContent = 'Projection falls short of the target, so increase the monthly contribution, timeline, or expected growth to close the gap.';
+            statusNode.className = 'goal-status mt-5 text-sm font-medium text-amber-700';
+          } else {
+            statusNode.textContent = 'Add a target amount to see progress and long-term projections.';
+            statusNode.className = 'goal-status mt-5 text-sm font-medium text-forest/75';
+          }
+
+          totalTarget += target;
+          totalCurrent += current;
+          totalProjected += projectedValue;
+        });
+
+        const combinedProgress = totalTarget > 0 ? (totalCurrent / totalTarget) * 100 : 0;
+        document.getElementById('summaryTarget').textContent = formatCurrency(totalTarget);
+        document.getElementById('summaryCurrent').textContent = formatCurrency(totalCurrent);
+        document.getElementById('summaryProjected').textContent = formatCurrency(totalProjected);
+        document.getElementById('summaryProgress').textContent = `${Math.min(combinedProgress, 100).toFixed(1)}%`;
+      }
+
+      addGoalButton.addEventListener('click', function () {
+        createGoalCard({
+          name: `Custom Goal ${goalCounter + 1}`,
+          target: 10000,
+          current: 0,
+          monthly: 250,
+          returnRate: 4,
+          years: 3
+        });
+        updateGoals();
+      });
+
+      [
+        { name: 'Emergency Fund', target: 12000, current: 4500, monthly: 300, returnRate: 3.5, years: 2 },
+        { name: 'House Down Payment', target: 30000, current: 9000, monthly: 700, returnRate: 5.5, years: 4 },
+        { name: 'Vacation Fund', target: 4500, current: 1600, monthly: 200, returnRate: 2, years: 1.5 }
+      ].forEach(createGoalCard);
+
+      updateGoals();
+    });
+  </script>
+</head>
+<body class="min-h-screen bg-[linear-gradient(160deg,#fdfbf4_0%,#eef4eb_48%,#d8e6da_100%)] text-forest">
+  <main class="mx-auto max-w-7xl px-6 py-10">
+    <section class="mb-8 overflow-hidden rounded-[2rem] border border-forest/10 bg-white/90 shadow-2xl shadow-forest/10">
+      <div class="grid gap-6 px-8 py-8 lg:grid-cols-[1.4fr_auto] lg:items-center">
+        <div>
+          <p class="text-sm uppercase tracking-[0.28em] text-forest/50">Checkpoint 6</p>
+          <h1 class="mt-3 text-4xl font-semibold" th:text="'Goal Tracker for ' + ${userName}">Goal Tracker</h1>
+          <p class="mt-4 max-w-3xl text-base leading-7 text-forest/80">
+            Build savings goals, compare your current balance to the target amount, and project forward with a simple formula-based growth model.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a th:href="@{/dashboard}" class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-[#f6f3eb]">Dashboard</a>
+          <a th:href="@{/allocation-calculator}" class="rounded-2xl border border-forest/20 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-[#f6f3eb]">Allocations</a>
+          <a th:href="@{/investment-structure}" class="rounded-2xl bg-sand px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-forest transition hover:bg-[#e5d5b3]">Investments</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/50">Combined Targets</p>
+        <p id="summaryTarget" class="mt-3 text-3xl font-semibold text-forest">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/50">Saved So Far</p>
+        <p id="summaryCurrent" class="mt-3 text-3xl font-semibold text-green-700">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/50">Projected Value</p>
+        <p id="summaryProjected" class="mt-3 text-3xl font-semibold text-blue-700">$0.00</p>
+      </div>
+      <div class="rounded-[1.75rem] border border-forest/10 bg-white p-6 shadow-lg">
+        <p class="text-sm uppercase tracking-[0.18em] text-forest/50">Progress</p>
+        <p id="summaryProgress" class="mt-3 text-3xl font-semibold text-moss">0.0%</p>
+      </div>
+    </section>
+
+    <section class="grid gap-8 lg:grid-cols-[1.5fr_0.8fr]">
+      <div>
+        <div class="mb-5 flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-semibold">Tracked Goals</h2>
+            <p class="mt-2 text-sm leading-6 text-forest/70">Everything here recalculates instantly and stays calculator-only in the browser.</p>
+          </div>
+          <button id="addGoalButton" type="button" class="rounded-2xl bg-forest px-5 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-forest/90">Add Goal</button>
+        </div>
+        <div id="goalList" class="space-y-5"></div>
+      </div>
+
+      <aside class="space-y-6">
+        <div class="rounded-[2rem] border border-forest/10 bg-white p-7 shadow-lg">
+          <h2 class="text-2xl font-semibold">Projection Formula</h2>
+          <div class="mt-4 space-y-4 text-sm leading-7 text-forest/75">
+            <p>Future value combines your current amount, monthly contributions, and annual growth converted to monthly compounding.</p>
+            <p>ETA is estimated by simulating month by month until the target is reached.</p>
+            <p>This makes the page a practical checkpoint demo without requiring brokerage APIs or stored account data.</p>
+          </div>
+        </div>
+
+        <div class="rounded-[2rem] bg-[#264734] p-7 text-white shadow-xl shadow-forest/20">
+          <h2 class="text-2xl font-semibold">Use Cases</h2>
+          <div class="mt-4 space-y-3 text-sm leading-7 text-white/80">
+            <p>Emergency fund planning</p>
+            <p>Down payment progress tracking</p>
+            <p>Vacation, tuition, or car replacement savings</p>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
